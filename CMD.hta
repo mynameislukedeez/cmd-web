@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Command Prompt</title>
+<hta:application id="oHTA" applicationname="SysConsole" border="thick" caption="yes" showintaskbar="yes" singleinstance="yes" sysmenu="yes" windowstate="normal" />
+<style>
+html, body {
+    background-color: #000000;
+    color: #C0C0C0;
+    font-family: "Consolas", "Lucida Console", "Courier New", monospace;
+    font-size: 14px;
+    margin: 0px;
+    padding: 0px;
+    height: 100%;
+}
+#consoleWrapper {
+    box-sizing: border-box;
+    padding: 10px;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+#history {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+#inputArea {
+    display: none;
+    margin-top: 0px;
+}
+#promptLine {
+    display: block;
+    width: 100%;
+}
+#promptLabel {
+    color: #C0C0C0;
+    white-space: nowrap;
+}
+input[type="text"], input[type="password"] {
+    background-color: #000000;
+    color: #C0C0C0;
+    border: none;
+    outline: none;
+    font-family: "Consolas", "Lucida Console", "Courier New", monospace;
+    font-size: 14px;
+    padding: 0px;
+    margin: 0px;
+}
+#cmdInput {
+    width: 75%;
+}
+#pwd {
+    width: 50%;
+}
+</style>
+<script language="VBScript">
+Dim objShell, strCurrentDir
+Set objShell = CreateObject("WScript.Shell")
+strCurrentDir = objShell.CurrentDirectory
+
+Sub Window_OnLoad
+    window.resizeTo 850, 500
+    Document.GetElementById("pwd").Focus
+End Sub
+
+Sub CheckPassword
+    Dim userPwd
+    userPwd = Document.GetElementById("pwd").Value
+    If userPwd = "nopennsandlukes" Then
+        Document.GetElementById("authArea").Style.Display = "none"
+        Document.GetElementById("inputArea").Style.Display = "block"
+        ShowHeader
+    Else
+        MsgBox "Incorrect Password", 48, "Access Denied"
+        Document.GetElementById("pwd").Value = ""
+    End If
+End Sub
+
+Sub ShowHeader
+    Dim headerText
+    headerText = "Microsoft Windows [Version 10.0.19045]" & vbCrLf & _
+                 "(c) Microsoft Corporation. All rights reserved." & vbCrLf & vbCrLf
+    Document.GetElementById("history").InnerText = headerText
+    UpdatePrompt
+End Sub
+
+Sub UpdatePrompt
+    Document.GetElementById("promptLabel").InnerText = strCurrentDir & ">"
+    Document.GetElementById("cmdInput").Focus
+    ScrollToBottom
+End Sub
+
+Sub ScrollToBottom
+    Dim wrapper
+    Set wrapper = Document.GetElementById("consoleWrapper")
+    Window.ScrollBy 0, 100000
+End Sub
+
+Sub RunCommand
+    Dim cmd, cleanCmd, objExec, strOutput, currentText
+    cmd = Document.GetElementById("cmdInput").Value
+    cleanCmd = LCase(Trim(cmd))
+    
+    ' Clear user input instantly
+    Document.GetElementById("cmdInput").Value = ""
+    
+    ' Fix layout: append command exactly next to the prompt on execution
+    currentText = Document.GetElementById("history").InnerText
+    Document.GetElementById("history").InnerText = currentText & strCurrentDir & ">" & cmd & vbCrLf
+    
+    If cleanCmd = "" Then
+        UpdatePrompt
+        Exit Sub
+    End If
+    
+    ' Handle Native CLS
+    If cleanCmd = "cls" Then
+        Document.GetElementById("history").InnerText = ""
+        UpdatePrompt
+        Exit Sub
+    End If
+    
+    ' Intercept CD adjustments to keep internal HTA path state synced
+    If Left(cleanCmd, 3) = "cd " Or cleanCmd = "cd" Then
+        On Error Resume Next
+        objShell.CurrentDirectory = Trim(Mid(cmd, 3))
+        strCurrentDir = objShell.CurrentDirectory
+        On Error GoTo 0
+        UpdatePrompt
+        Exit Sub
+    End If
+    
+    ' Fallback execution for other system commands
+    On Error Resume Next
+    Set objExec = objShell.Exec("%comspec% /c " & cmd)
+    If Err.Number <> 0 Then
+        strOutput = "Error executing command." & vbCrLf
+    Else
+        strOutput = objExec.StdOut.ReadAll()
+    End If
+    On Error GoTo 0
+    
+    ' Append response payload cleanly
+    currentText = Document.GetElementById("history").InnerText
+    Document.GetElementById("history").InnerText = currentText & strOutput
+    
+    UpdatePrompt
+End Sub
+
+Sub HandleKeyPress
+    If window.event.keyCode = 13 Then
+        RunCommand
+    End If
+End Sub
+
+Sub HandleAuthKeyPress
+    If window.event.keyCode = 13 Then
+        CheckPassword
+    End If
+End Sub
+</script>
+</head>
+<body>
+<div id="consoleWrapper">
+    <!-- Combined History Log -->
+    <div id="history">Authentication Required. Please log in.
+</div>
+
+    <!-- Password Prompt Inline -->
+    <div id="authArea" style="margin-top: 15px;">
+        <span>Enter Password: </span>
+        <input type="password" id="pwd" onkeypress="HandleAuthKeyPress">
+    </div>
+
+    <!-- Command Input Inline (Mirrors physical prompt layout) -->
+    <div id="inputArea">
+        <div id="promptLine">
+            <span id="promptLabel"></span><input type="text" id="cmdInput" onkeypress="HandleKeyPress" autocomplete="off">
+        </div>
+    </div>
+</div>
+</body>
+</html>
